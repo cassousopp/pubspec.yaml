@@ -1,6 +1,8 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:nexus_app/screens/alert_detail_screen.dart';
 import 'package:nexus_app/screens/alert_history_screen.dart';
+import 'package:nexus_app/screens/alert_screen.dart'; // Pour l'onglet Photos
 import 'package:nexus_app/screens/auth/auth_login_user.dart';
 import 'package:nexus_app/screens/auth/auth_signup_user.dart';
 import 'package:nexus_app/screens/account_screen.dart';
@@ -18,33 +20,74 @@ import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/pairing_screen.dart';
 
+// Classe pour gérer le thème globalement
+class ThemeManager extends ChangeNotifier {
+  ThemeMode _themeMode = ThemeMode.dark;
+
+  ThemeMode get themeMode => _themeMode;
+
+  Future<void> loadTheme() async {
+    final mode = await SettingsService.getThemeMode();
+    _themeMode = switch (mode) {
+      'light' => ThemeMode.light,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.dark,
+    };
+    notifyListeners();
+  }
+
+  Future<void> setTheme(String mode) async {
+    await SettingsService.setThemeMode(mode);
+    _themeMode = switch (mode) {
+      'light' => ThemeMode.light,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.dark,
+    };
+    notifyListeners();
+  }
+}
+
+final themeManager = ThemeManager();
+
+class _AppLifecycleObserver extends WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      SessionService.markActiveNow();
+    }
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding.instance.addObserver(_AppLifecycleObserver());
+  
   await Supabase.initialize(
     url: 'https://theghvwkzakcwtehrdya.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoZWdodndremFrY3d0ZWhyZHlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MzYzOTksImV4cCI6MjA3OTAxMjM5OX0.U_TOsAkRDUZSVp_VAU3w8bJVtCLOgdAIiKp1-Y08X8A',
   );
   
-  // Initialize notification service
   await AlertNotificationService().initialize();
-
-  // Force reconnexion si inactivité > 30 jours
   await SessionService.enforceReLoginIfNeeded();
+  await themeManager.loadTheme();
+  SessionService.markActiveNow();
   
   runApp(const NexusApp());
 }
 
-final _router = GoRouter(
+final router = GoRouter(
   initialLocation: '/splash',
   redirect: (context, state) {
     final isAuthed = Supabase.instance.client.auth.currentUser != null;
     const protected = {
       '/pairing',
       '/dashboard',
-      '/alerts',
+      '/photos',
+      '/history',
       '/account',
       '/devices',
       '/settings',
+      '/alert-detail',
     };
     final isProtected = protected.contains(state.matchedLocation);
     if (isProtected && !isAuthed) return '/auth';
@@ -52,109 +95,64 @@ final _router = GoRouter(
   },
   routes: [
     GoRoute(
-      path: '/splash',
-      builder: (context, state) => const SplashScreen(),
+      path: '/splash', builder: (context, state) => const SplashScreen(),
     ),
     GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
+      path: '/login', builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
-      path: '/pairing',
-      builder: (context, state) => const PairingScreen(),
+      path: '/pairing', builder: (context, state) => const PairingScreen(),
     ),
     GoRoute(
-      path: '/dashboard',
-      builder: (context, state) => const DashboardScreen(),
+      path: '/dashboard', builder: (context, state) => const DashboardScreen(),
     ),
     GoRoute(
-      path: '/account',
-      builder: (context, state) => const AccountScreen(),
+      path: '/account', builder: (context, state) => const AccountScreen(),
     ),
     GoRoute(
-      path: '/devices',
-      builder: (context, state) => const DevicesScreen(),
+      path: '/devices', builder: (context, state) => const DevicesScreen(),
     ),
     GoRoute(
-      path: '/settings',
-      builder: (context, state) => const SettingsScreen(),
+      path: '/settings', builder: (context, state) => const SettingsScreen(),
     ),
     GoRoute(
-      path: '/auth',
-      builder: (context, state) => const AuthLoginUser(),
+      path: '/auth', builder: (context, state) => const AuthLoginUser(),
     ),
     GoRoute(
-      path: '/signup',
-      builder: (context, state) => const AuthSignupUser(),
+      path: '/signup', builder: (context, state) => const AuthSignupUser(),
     ),
     GoRoute(
-      path: '/tutorial',
-      builder: (context, state) => const TutorialScreen(),
+      path: '/tutorial', builder: (context, state) => const TutorialScreen(),
     ),
     GoRoute(
-      path: '/alerts',
-      builder: (context, state) => const AlertHistoryScreen(),
+      path: '/photos', builder: (context, state) => const AlertScreen(),
     ),
-
+    GoRoute(
+      path: '/history', builder: (context, state) => const AlertHistoryScreen(),
+    ),
+    GoRoute(
+      path: '/alert-detail', builder: (context, state) => const AlertDetailScreen(),
+    ),
   ],
-
 );
 
-
-
-class NexusApp extends StatefulWidget {
+class NexusApp extends StatelessWidget {
   const NexusApp({super.key});
 
   @override
-  State<NexusApp> createState() => _NexusAppState();
-}
-
-class _NexusAppState extends State<NexusApp> with WidgetsBindingObserver {
-  ThemeMode _themeMode = ThemeMode.dark;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    // Premier marquage "actif" au lancement
-    SessionService.markActiveNow();
-    _loadTheme();
-  }
-
-  Future<void> _loadTheme() async {
-    final mode = await SettingsService.getThemeMode();
-    if (!mounted) return;
-    setState(() {
-      _themeMode = switch (mode) {
-        'light' => ThemeMode.light,
-        'system' => ThemeMode.system,
-        _ => ThemeMode.dark,
-      };
-    });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      SessionService.markActiveNow();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'NEXUS',
-      debugShowCheckedModeBanner: false,
-      routerConfig: _router,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: _themeMode,
+    return ListenableBuilder(
+      listenable: themeManager,
+      builder: (context, _) {
+        return MaterialApp.router(
+          title: 'NEXUS',
+          debugShowCheckedModeBanner: false,
+          routerConfig: router,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeManager.themeMode,
+        );
+      },
     );
   }
 }

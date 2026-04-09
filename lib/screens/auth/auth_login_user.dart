@@ -14,6 +14,7 @@ class _AuthLoginUserState extends State<AuthLoginUser> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   bool loading = false;
+  bool obscurePass = true;
   String? errorMessage;
 
   Future<void> login() async {
@@ -39,22 +40,18 @@ class _AuthLoginUserState extends State<AuthLoginUser> {
       if (!mounted) return;
 
       if (res.user != null) {
-        // Navigation vers pairing en remplaçant l'historique de login
-        context.go('/pairing');
+        context.go('/dashboard');
       }
     } on AuthException catch (e) {
       setState(() {
-        // Traduction des messages d'erreur courants de Supabase
         if (e.message.contains("Invalid login credentials")) {
           errorMessage = "Email ou mot de passe incorrect.";
-        } else if (e.message.contains("Email not confirmed")) {
-          errorMessage = "Veuillez confirmer votre email avant de vous connecter.";
         } else {
           errorMessage = e.message;
         }
       });
     } catch (e) {
-      setState(() => errorMessage = "Une erreur inattendue est survenue.");
+      setState(() => errorMessage = "Une erreur est survenue.");
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -63,103 +60,142 @@ class _AuthLoginUserState extends State<AuthLoginUser> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        // Le bouton retour sera automatiquement ajouté car nous avons utilisé context.push
-        title: Hero(tag: 'logo', child: Image.asset("assets/images/logo_nexus.png", height: 50)),
-      ),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
-              Text(
-                "Bon retour !",
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: AppTheme.primary,
+              const SizedBox(height: 40),
+              
+              // Header
+              const Text(
+                "Connexion",
+                style: TextStyle(
+                  fontSize: 32,
                   fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A1A),
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
-                "Connectez-vous pour gérer votre sécurité Nexus.",
-                style: TextStyle(color: Colors.black54, fontSize: 15),
+                "Bon retour parmi nous",
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Color(0xFF757575),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const SizedBox(height: 48),
+
+              // Form fields
+              _buildLabel("Adresse email"),
+              _buildTextField(
+                ctrl: emailCtrl, 
+                hint: "thomas@mail.com", 
+                icon: Icons.email_outlined, 
+                keyboardType: TextInputType.emailAddress
               ),
               
-              const SizedBox(height: 40),
-
-              // Champ Email
-              _buildInputCard(
-                controller: emailCtrl,
-                label: "Adresse email",
-                icon: Icons.email_rounded,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 20),
-
-              // Champ Mot de passe
-              _buildInputCard(
-                controller: passCtrl,
-                label: "Mot de passe",
-                icon: Icons.lock_rounded,
+              const SizedBox(height: 24),
+              
+              _buildLabel("Mot de passe"),
+              _buildTextField(
+                ctrl: passCtrl, 
+                hint: "••••••••", 
+                icon: Icons.lock_outline, 
+                obscureText: obscurePass,
                 isPassword: true,
+                onToggleObscure: () => setState(() => obscurePass = !obscurePass),
+              ),
+
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {},
+                  child: const Text(
+                    "Mot de passe oublié ?",
+                    style: TextStyle(color: AppTheme.secondaryPink, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
 
               if (errorMessage != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                  ),
+                ),
+
+              const SizedBox(height: 32),
+
+              // Submit Button
+              ElevatedButton(
+                onPressed: loading ? null : login,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 60),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  elevation: 0,
+                ),
+                child: loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Se connecter", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+
+              const SizedBox(height: 32),
+
+              // OR divider
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text("ou", style: TextStyle(color: Colors.grey.shade500)),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                ],
+              ),
+
+              const SizedBox(height: 32),
+
+              // Social buttons
+              Row(
+                children: [
+                  Expanded(child: _buildSocialButton(Icons.g_mobiledata_rounded, const Color(0xFFDB4437), "Google")),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildSocialButton(Icons.apple_rounded, Colors.black, "Apple")),
+                ],
+              ),
+              
+              const SizedBox(height: 48),
+
+              Center(
+                child: GestureDetector(
+                  onTap: () => context.push('/signup'),
+                  child: RichText(
+                    text: TextSpan(
+                      text: "Nouveau ici ? ",
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
                       children: [
-                        const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            errorMessage!,
-                            style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                        TextSpan(
+                          text: "Créer un compte",
+                          style: const TextStyle(
+                            color: Color(0xFF6366F1),
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {},
-                  child: const Text("Mot de passe oublié ?", style: TextStyle(color: AppTheme.secondary)),
-                ),
               ),
-
-              const SizedBox(height: 30),
-
-              ElevatedButton(
-                onPressed: loading ? null : login,
-                child: loading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text("Se connecter"),
-              ),
-
-              const SizedBox(height: 30),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Nouveau chez Nexus ?"),
-                  TextButton(
-                    onPressed: () => context.push('/signup'),
-                    child: const Text("Créer un compte", style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary)),
-                  ),
-                ],
-              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -167,34 +203,73 @@ class _AuthLoginUserState extends State<AuthLoginUser> {
     );
   }
 
-  Widget _buildInputCard({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
+  Widget _buildLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF1A1A1A),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController ctrl, 
+    required String hint, 
+    required IconData icon, 
+    bool obscureText = false, 
+    TextInputType keyboardType = TextInputType.text,
     bool isPassword = false,
-    TextInputType? keyboardType,
+    VoidCallback? onToggleObscure,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF7F7F2),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4))
-        ],
       ),
       child: TextField(
-        controller: controller,
-        obscureText: isPassword,
+        controller: ctrl,
+        obscureText: obscureText,
         keyboardType: keyboardType,
+        style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF1A1A1A)),
         decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: AppTheme.primary.withValues(alpha: 0.5)),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.grey.shade400),
+          prefixIcon: Icon(icon, color: Colors.grey.shade600),
+          suffixIcon: isPassword ? IconButton(
+            icon: Icon(
+              obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              color: Colors.grey.shade600,
+            ),
+            onPressed: onToggleObscure,
+          ) : null,
+          border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSocialButton(IconData icon, Color color, String label) {
+    return OutlinedButton(
+      onPressed: () {},
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.black87,
+        minimumSize: const Size(double.infinity, 56),
+        side: BorderSide(color: Colors.grey.shade300),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }

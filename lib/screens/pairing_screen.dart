@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nexus_app/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PairingScreen extends StatefulWidget {
@@ -48,8 +47,7 @@ class _PairingScreenState extends State<PairingScreen> {
 
       if (module == null) {
         setState(() {
-          errorMessage =
-              "Identifiant ou clé secrète incorrect(e), ou module inaccessible.";
+          errorMessage = "Identifiant ou clé secrète incorrect(e).";
           loading = false;
         });
         return;
@@ -65,14 +63,9 @@ class _PairingScreenState extends State<PairingScreen> {
           .eq("device_id", deviceId);
 
       if (!mounted) return;
-
       _showSuccessDialog();
-    } on PostgrestException catch (e) {
-      setState(() {
-        errorMessage = "Accès refusé ou requête invalide : ${e.message}";
-      });
     } catch (e) {
-      setState(() => errorMessage = "Erreur : $e");
+      setState(() => errorMessage = "Une erreur est survenue.");
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -84,16 +77,11 @@ class _PairingScreenState extends State<PairingScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: const Column(
-          children: [
-            Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 60),
-            SizedBox(height: 16),
-            Text("Module associé !", textAlign: TextAlign.center),
-          ],
-        ),
+        title: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 60),
         content: const Text(
-          "Votre appareil NEXUS est maintenant lié à votre compte.",
+          "Module associé avec succès !",
           textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
           Center(
@@ -111,103 +99,125 @@ class _PairingScreenState extends State<PairingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Hero(tag: 'logo', child: Image.asset("assets/images/logo_nexus.png", height: 60)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 20),
+          onPressed: () => context.pop(),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
-              Text(
-                "Nouveau module",
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: AppTheme.primary,
+              const Text(
+                "Associer un module",
+                style: TextStyle(
+                  fontSize: 32,
                   fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A1A),
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                "Entrez les identifiants présents sur votre boîtier Nexus.",
-                style: Theme.of(context).textTheme.bodyMedium,
+              const Text(
+                "Connectez votre module NEXUS",
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Color(0xFF757575),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              const SizedBox(height: 30),
-              
-              // Animated Illustration Card
+
+              const SizedBox(height: 48),
+
+              // Illustration Icône Cadenas
               Center(
                 child: Container(
-                  height: size.height * 0.22,
-                  width: double.infinity,
+                  width: 140,
+                  height: 140,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: AppTheme.primaryGradient.begin,
-                      end: AppTheme.primaryGradient.end,
-                      colors: AppTheme.primaryGradient.colors
-                          .map((c) => c.withValues(alpha: 0.10))
-                          .toList(),
-                    ),
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(
-                        color: AppTheme.primary.withValues(alpha: 0.05)),
+                    color: const Color(0xFFF3F0FF),
+                    borderRadius: BorderRadius.circular(40),
                   ),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
+                      const Icon(Icons.lock_outline_rounded, color: Color(0xFF6366F1), size: 60),
                       Positioned(
+                        bottom: 55,
                         child: Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.5),
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEC4899),
                             shape: BoxShape.circle,
                           ),
                         ),
-                      ),
-                      Image.asset("assets/images/btr_nexus.png", height: 120),
+                      )
                     ],
                   ),
                 ),
               ),
-              
-              const SizedBox(height: 40),
 
-              // Inputs
-              _buildTextField(
-                controller: deviceIdCtrl,
-                label: "Identifiant du module",
-                icon: Icons.qr_code_scanner_rounded,
-              ),
-              const SizedBox(height: 20),
-              _buildTextField(
-                controller: deviceSecretCtrl,
-                label: "Clé secrète",
-                icon: Icons.vpn_key_rounded,
-                isPassword: true,
-              ),
+              const SizedBox(height: 48),
+
+              // Form fields
+              _buildLabel("Nom du module"),
+              _buildTextField(deviceIdCtrl, "NX-Garage-01"),
+              
+              const SizedBox(height: 24),
+              
+              _buildLabel("Mot de passe du module"),
+              _buildTextField(deviceSecretCtrl, "••••••••", obscureText: true),
 
               if (errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Text(
                     errorMessage!,
-                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
                   ),
                 ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 48),
 
+              // Submit Button
               ElevatedButton(
                 onPressed: loading ? null : pairDevice,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 60),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  elevation: 0,
+                ),
                 child: loading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text("Associer maintenant"),
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Associer le module", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 24),
+
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    "Infos disponibles sur l'étiquette du module",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -215,33 +225,35 @@ class _PairingScreenState extends State<PairingScreen> {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool isPassword = false,
-  }) {
+  Widget _buildLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF1A1A1A),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController ctrl, String hint, {bool obscureText = false}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF7F7F2),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4))
-        ],
       ),
       child: TextField(
-        controller: controller,
-        obscureText: isPassword,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        controller: ctrl,
+        obscureText: obscureText,
+        style: const TextStyle(fontWeight: FontWeight.w500),
         decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-          prefixIcon: Icon(icon, color: AppTheme.primary.withValues(alpha: 0.5)),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(vertical: 18),
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.grey.shade400),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
         ),
       ),
     );

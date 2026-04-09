@@ -41,7 +41,15 @@ class AlertNotificationService {
       iOS: iOSSettings,
     );
 
-    await _notificationsPlugin.initialize(settings);
+    await _notificationsPlugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        _log('Notification clicked: ${response.payload}');
+        // Logic to handle click when app is in foreground/background
+        // The router will handle the redirection if we use a global key or similar,
+        // but for now, just bringing the app to front is default.
+      },
+    );
 
     // Create Android notification channel
     await _createAndroidChannel();

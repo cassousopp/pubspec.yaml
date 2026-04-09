@@ -32,6 +32,9 @@ dependencies:
   # Session (inactivité)
   shared_preferences: ^2.2.3
 
+  # Launcher
+  url_launcher: ^6.3.0
+
   # IoT & Scan
   wifi_iot: ^0.3.19
 

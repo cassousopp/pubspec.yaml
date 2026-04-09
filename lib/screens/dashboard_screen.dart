@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nexus_app/services/alert_notification_service.dart';
-import 'package:nexus_app/theme/app_theme.dart';
 import 'package:nexus_app/widgets/nexus_scaffold.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,10 +12,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  String? vehicleImageUrl;
   Map<String, dynamic>? device;
   Map<String, dynamic>? lastAlert;
   bool loading = true;
+  bool isMonitoring = true;
+  int totalAlerts = 0;
 
   @override
   void initState() {
@@ -29,17 +29,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final user = supabase.auth.currentUser;
 
     if (user == null) {
-      if (mounted) {
-        setState(() {
-          device = null;
-          lastAlert = null;
-          loading = false;
-        });
-      }
+      if (mounted) setState(() => loading = false);
       return;
     }
 
-    // Initial fetch
     final res = await supabase
         .from("devices")
         .select("*, profiles:owner_id(username)")
@@ -48,8 +41,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (res != null) {
       device = res;
-      _updateImageUrl();
-
       final alert = await supabase
           .from("alerts")
           .select()
@@ -58,9 +49,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .limit(1)
           .maybeSingle();
 
+      // Charger le nombre total d'alertes
+      final allAlerts = await supabase
+          .from("alerts")
+          .select()
+          .eq("device_id", device!["device_id"]);
+
       lastAlert = alert;
-      
-      // Setup Realtime listeners for live updates
+      totalAlerts = allAlerts.length;
+
       _setupRealtimeListeners(device!["device_id"]);
       AlertNotificationService().listenToAlerts(device!["device_id"]);
     }
@@ -68,224 +65,206 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() => loading = false);
   }
 
-  void _updateImageUrl() {
-    if (device == null) return;
-    vehicleImageUrl = device?["picture_url"] ??
-        device?["image_url"] ??
-        device?["last_image_url"] ??
-        device?["photo_url"] ??
-        device?["lastImageUrl"];
-  }
-
   void _setupRealtimeListeners(String deviceId) {
     final supabase = Supabase.instance.client;
-
-    // Écouter les mises à jour du véhicule (batterie, statut, etc.)
-    supabase
-        .channel('device_updates')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'devices',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'device_id',
-            value: deviceId,
-          ),
-          callback: (payload) {
-            if (mounted) {
-              setState(() {
-                device = {...?device, ...payload.newRecord};
-                _updateImageUrl();
-              });
-            }
-          },
-        )
-        .subscribe();
-
-    // Écouter les nouvelles alertes pour mettre à jour la dernière activité
-    supabase
-        .channel('alert_updates')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'alerts',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'device_id',
-            value: deviceId,
-          ),
-          callback: (payload) {
-            if (mounted) {
-              setState(() {
-                lastAlert = payload.newRecord;
-              });
-            }
-          },
-        )
-        .subscribe();
-  }
-
-  @override
-  void dispose() {
-    AlertNotificationService().stopListening();
-    Supabase.instance.client.removeAllChannels();
-    super.dispose();
+    supabase.channel('dashboard_updates').onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'devices',
+      filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'device_id', value: deviceId),
+      callback: (payload) {
+        if (mounted && isMonitoring) loadDevice();
+      },
+    ).subscribe();
   }
 
   @override
   Widget build(BuildContext context) {
+    final username = (device?['profiles']?['username'] ?? "User").toString();
+    final initials = username.isNotEmpty ? username[0].toUpperCase() : "U";
+
     return NexusScaffold(
-      title: Image.asset("assets/images/logo_nexus.png", height: 60),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.notifications_none_rounded,
-              color: AppTheme.primary),
-          onPressed: () => context.go('/alerts'),
+      title: GestureDetector(
+        onTap: loadDevice,
+        child: Row(
+          children: [
+            Image.asset("assets/images/logo_nexus.png", height: 120),
+            const SizedBox(width: 12),
+          ],
         ),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16.0),
+          child: GestureDetector(
+            onTap: () => context.go('/account'),
+            child: CircleAvatar(
+              backgroundColor: const Color(0xFFF3F0FF),
+              child: Text(initials, style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold, fontSize: 14)),
+            ),
+          ),
+        )
       ],
       body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildDashboard(),
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
+          : RefreshIndicator(
+              onRefresh: loadDevice,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    _buildSurveillanceCard(),
+                    const SizedBox(height: 20),
+                    if (lastAlert != null && isMonitoring) _buildAlertNotificationCard(),
+                    const SizedBox(height: 20),
+                    _buildRealStatsRow(),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
-  Widget _buildDashboard() {
-    return RefreshIndicator(
-      onRefresh: loadDevice,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildVehicleHeader(),
-            const SizedBox(height: 24),
-            
-            Text("Statut du système", style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            
-            if (device != null) _buildStatusCard(),
-            const SizedBox(height: 16),
-            
-            if (device != null) _buildBatteryWifiRow(),
-            const SizedBox(height: 16),
-            
-            if (lastAlert != null) ...[
-              Text("Dernière activité", style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              _buildLastAlertCard(),
-              const SizedBox(height: 16),
-            ],
-            
-            if (vehicleImageUrl != null && vehicleImageUrl!.isNotEmpty) _buildLastImageCard(),
-            
-            const SizedBox(height: 100),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVehicleHeader() {
+  Widget _buildSurveillanceCard() {
     return Container(
-      height: 220,
-      width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          colors: [Color(0xFF818CF8), Color(0xFF6366F1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 10),
-          )
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Mode surveillance",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+              Switch(
+                value: isMonitoring,
+                onChanged: (v) {
+                  setState(() => isMonitoring = v);
+                  if (v) loadDevice();
+                },
+                activeColor: Colors.white,
+                activeTrackColor: Colors.white.withValues(alpha: 0.3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isMonitoring ? "Active" : "Désactivé",
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 36),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                "Connecté",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+            ],
+          ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(40),
-              child: Center(
-                child: Image.asset('assets/images/nexus_roue.png',
-                    fit: BoxFit.contain),
-              ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.6),
-                      Colors.transparent
-                    ],
-                  ),
-                ),
-                child: const Text(
-                  "Mon véhicule connecté",
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _buildStatusCard() {
-    final status = device!["status"] ?? "Indisponible";
-    final isSecure = status.toLowerCase().contains("sécurisé") || status.toLowerCase().contains("ok");
+  Widget _buildAlertNotificationCard() {
+    if (lastAlert == null) return const SizedBox.shrink();
+    
+    final alertName = lastAlert!["message"] ?? "Alerte détectée";
+    final deviceName = device?['device_name'] ?? "Module";
+    final DateTime date = DateTime.parse(lastAlert!["created_at"]);
+    final imageUrl = lastAlert!["picture_url"] ?? lastAlert!["image_url"];
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isSecure 
-            ? [const Color(0xFF4CAF50), const Color(0xFF81C784)]
-            : [const Color(0xFFFF5252), const Color(0xFFFF8A80)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFFFE4ED), width: 1.5),
         boxShadow: [
-          BoxShadow(
-            color: (isSecure ? Colors.green : Colors.red)
-                .withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          )
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: Colors.white.withValues(alpha: 0.2),
-            child: Icon(isSecure ? Icons.shield_rounded : Icons.warning_rounded, color: Colors.white, size: 32),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  status.toUpperCase(),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Color(0xFFFFF0F5), shape: BoxShape.circle),
+                child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4D8D), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Dernière alerte", style: TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text(
+                      timeAgo(date),
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                 ),
-                Text(
-                  isSecure ? "Votre véhicule est protégé" : "Attention requise",
-                  style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withValues(alpha: 0.9)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            alertName,
+            style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              children: [
+                Container(
+                  height: 180,
+                  width: double.infinity,
+                  color: const Color(0xFFF3F0FF),
+                  child: imageUrl != null 
+                    ? Image.network(imageUrl, fit: BoxFit.cover)
+                    : Image.asset("assets/images/nexus_roue.png", fit: BoxFit.cover),
+                ),
+                Positioned(
+                  bottom: 12,
+                  right: 12,
+                  child: ElevatedButton(
+                    onPressed: () => context.push('/alert-detail', extra: {...lastAlert!, 'device_name': deviceName}),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD81B60),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Row(
+                      children: [
+                        Text("Voir", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_rounded, size: 14),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -295,121 +274,115 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildBatteryWifiRow() {
+  Widget _buildRealStatsRow() {
+    final int batteryLevel = int.tryParse(device?["battery"]?.toString() ?? "0") ?? 0;
+    final Color batteryColor = batteryLevel <= 30 ? Colors.redAccent : Colors.greenAccent;
+
     return Row(
       children: [
+        // Alerts Card
         Expanded(
-          child: _modernInfoCard(
-            icon: Icons.battery_charging_full_rounded,
-            iconColor: const Color(0xFF00C853),
-            title: "Batterie",
-            value: "${device!["battery"] ?? "?"}%",
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF0F5),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Alertes", style: TextStyle(color: Color(0xFFD81B60), fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(totalAlerts.toString(), style: const TextStyle(color: Color(0xFFD81B60), fontWeight: FontWeight.w900, fontSize: 32)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD1E1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFD81B60), size: 24),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(width: 16),
+        // Battery Card
         Expanded(
-          child: _modernInfoCard(
-            icon: Icons.wifi_tethering_rounded,
-            iconColor: AppTheme.primary,
-            title: "Signal",
-            value: "Excellent", 
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.grey.shade100),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Batterie", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: batteryColor.withValues(alpha: 0.3), width: 1.5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      padding: const EdgeInsets.all(2),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: batteryLevel,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: batteryColor,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 100 - batteryLevel,
+                            child: const SizedBox(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text("$batteryLevel%", style: TextStyle(color: batteryColor, fontWeight: FontWeight.w900, fontSize: 20)),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _modernInfoCard({required IconData icon, required Color iconColor, required String title, required String value}) {
+  Widget _buildStatItem(String label, String count, {Color? color}) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF7F7F2),
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: iconColor, size: 28),
-          const SizedBox(height: 12),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(count, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: color ?? Colors.black)),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLastAlertCard() {
-    return Card(
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              shape: BoxShape.circle),
-          child: const Icon(Icons.history_toggle_off_rounded, color: Colors.orange),
-        ),
-        title: Text(lastAlert!["message"] ?? "Alerte détectée", style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(timeAgo(DateTime.parse(lastAlert!["created_at"]))),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-        onTap: () => context.go('/alerts'),
-      ),
-    );
-  }
-
-  Widget _buildLastImageCard() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Dernière capture", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        GestureDetector(
-          onTap: () => _showImagePreview(vehicleImageUrl!),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Image.network(
-              vehicleImageUrl!,
-              height: 180,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                height: 180,
-                color: Colors.grey.shade200,
-                child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showImagePreview(String url) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Image.network(url, fit: BoxFit.contain),
-            ),
-            const SizedBox(height: 20),
-            IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 40),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -417,8 +390,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 String timeAgo(DateTime time) {
   final diff = DateTime.now().difference(time);
-  if (diff.inSeconds < 60) return "À l'instant";
-  if (diff.inMinutes < 60) return "Il y a ${diff.inMinutes} min";
-  if (diff.inHours < 24) return "Il y a ${diff.inHours} h";
-  return "Il y a ${diff.inDays} j";
+  if (diff.inSeconds < 60) return "il y a un instant";
+  if (diff.inMinutes < 60) return "il y a ${diff.inMinutes} min";
+  if (diff.inHours < 24) return "il y a ${diff.inHours} h";
+  return "il y a ${diff.inDays} j";
 }

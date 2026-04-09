@@ -17,6 +17,7 @@ class _AuthSignupUserState extends State<AuthSignupUser> {
   final phoneCtrl = TextEditingController();
 
   bool loading = false;
+  bool obscurePass = true;
   String? errorMessage;
 
   // Liste des pays disponibles
@@ -30,7 +31,7 @@ class _AuthSignupUserState extends State<AuthSignupUser> {
     {"flag": "🇬🇦", "code": "+241"},
   ];
 
-  String selectedCode = "+33"; // Code par défaut (France)
+  String selectedCode = "+33";
 
   Future<void> register() async {
     final email = emailCtrl.text.trim();
@@ -45,6 +46,30 @@ class _AuthSignupUserState extends State<AuthSignupUser> {
       return;
     }
 
+    // Validation email
+    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email)) {
+      setState(() {
+        errorMessage = "Veuillez entrer une adresse email valide.";
+      });
+      return;
+    }
+
+    // Validation mot de passe (minimum 6 caractères)
+    if (pass.length < 6) {
+      setState(() {
+        errorMessage = "Le mot de passe doit contenir au moins 6 caractères.";
+      });
+      return;
+    }
+
+    // Validation téléphone 
+    if (phone.length < 8) {
+      setState(() {
+        errorMessage = "Veuillez entrer un numéro de téléphone valide.";
+      });
+      return;
+    }
+
     setState(() {
       loading = true;
       errorMessage = null;
@@ -53,7 +78,6 @@ class _AuthSignupUserState extends State<AuthSignupUser> {
     try {
       final supabase = Supabase.instance.client;
 
-      // 1️⃣ Création du compte
       final res = await supabase.auth.signUp(
         email: email,
         password: pass,
@@ -63,17 +87,14 @@ class _AuthSignupUserState extends State<AuthSignupUser> {
 
       if (res.user == null) {
         setState(() {
-          errorMessage = "Impossible de créer le compte.";
+          errorMessage = "Impossible de créer le compte. Cet email existe peut-être déjà.";
         });
         return;
       }
 
       final userId = res.user!.id;
+      final finalPhone = "$selectedCode $phone";
 
-      // 2️⃣ Construction du numéro final
-      final finalPhone = "$selectedCode ${phoneCtrl.text.trim()}";
-
-      // 3️⃣ Enregistrement dans la table profiles
       try {
         await supabase.from("profiles").insert({
           "id": userId,
@@ -81,46 +102,38 @@ class _AuthSignupUserState extends State<AuthSignupUser> {
           "phone": finalPhone,
           "email": email,
         });
-      } catch (e) {
+      } catch (profileError) {
         setState(() {
-          errorMessage =
-          "Compte créé, mais l’enregistrement du profil a échoué.\nVérifiez la table 'profiles'.";
+          errorMessage = "Compte créé, mais l'enregistrement du profil a échoué: $profileError";
         });
-        loading = false;
+        if (mounted) setState(() => loading = false);
         return;
       }
 
       if (!mounted) return;
-
       setState(() => loading = false);
 
-      // 4️⃣ Popup succès + redirection vers login
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text("Compte créé ✔"),
-          content: const Text(
-            "Votre compte NEXUS a été créé avec succès.\nVeuillez vous connecter.",
-          ),
+          content: const Text("Votre compte NEXUS a été créé avec succès."),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                if (mounted) context.go('/auth');
+                context.go('/pairing');
               },
-              child: const Text("OK"),
+              child: const Text("OK", style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
             ),
           ],
         ),
       );
     } on AuthApiException catch (e) {
-      setState(() {
-        errorMessage = e.message;
-      });
+      setState(() => errorMessage = "Erreur d'authentification: ${e.message}");
     } catch (e) {
-      setState(() {
-        errorMessage = "Une erreur est survenue. Veuillez réessayer.";
-      });
+      setState(() => errorMessage = "Une erreur est survenue: $e");
     }
 
     if (mounted) setState(() => loading = false);
@@ -128,197 +141,234 @@ class _AuthSignupUserState extends State<AuthSignupUser> {
 
   @override
   Widget build(BuildContext context) {
-    final h = MediaQuery.of(context).size.height;
-    final w = MediaQuery.of(context).size.width;
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: w * 0.08, vertical: 20),
-            child: Column(
-              children: [
-                SizedBox(height: h * 0.03),
-
-                Image.asset(
-                  "assets/images/logo_nexus.png",
-                  height: h * 0.18,
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 40),
+              
+              const Text(
+                "Créer un compte",
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A1A),
                 ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Rejoignez NEXUS",
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Color(0xFF757575),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
 
-                SizedBox(height: h * 0.03),
+              const SizedBox(height: 40),
 
-                const Text(
-                  "Créer un compte",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
+              _buildLabel("Nom d'utilisateur"),
+              _buildTextField(ctrl: usernameCtrl, hint: "Thomas", icon: Icons.person_outline),
+              
+              const SizedBox(height: 20),
+              
+              _buildLabel("Numéro de téléphone"),
+              _buildPhoneField(),
+              
+              const SizedBox(height: 20),
+              
+              _buildLabel("Email"),
+              _buildTextField(ctrl: emailCtrl, hint: "thomas@mail.com", icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
+              
+              const SizedBox(height: 20),
+              
+              _buildLabel("Mot de passe"),
+              _buildTextField(
+                ctrl: passCtrl, 
+                hint: "••••••••", 
+                icon: Icons.lock_outline, 
+                obscureText: obscurePass,
+                isPassword: true,
+                onToggleObscure: () => setState(() => obscurePass = !obscurePass),
+              ),
+
+              if (errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
                   ),
                 ),
 
-                const SizedBox(height: 6),
-                const Text(
-                  "Rejoignez la communauté NEXUS",
-                  style: TextStyle(color: Colors.black54),
+              const SizedBox(height: 40),
+
+              ElevatedButton(
+                onPressed: loading ? null : register,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 60),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  elevation: 0,
                 ),
+                child: loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("S'inscrire", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
 
-                SizedBox(height: h * 0.04),
+              const SizedBox(height: 24),
 
-                // USERNAME
-                TextField(
-                  controller: usernameCtrl,
-                  decoration: InputDecoration(
-                    labelText: "Nom d'utilisateur",
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // 🔥 PHONE WITH COUNTRY SELECTOR
-                Row(
-                  children: [
-                    // Menu déroulant pour le pays
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: DropdownButton<String>(
-                        value: selectedCode,
-                        underline: const SizedBox(),
-                        items: countryList.map((c) {
-                          return DropdownMenuItem<String>(
-                            value: c["code"],
-                            child: Text("${c["flag"]} ${c["code"]}"),
-                          );
-                        }).toList(),
-                        onChanged: (v) {
-                          setState(() {
-                            selectedCode = v!;
-                          });
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // Champ numéro
-                    Expanded(
-                      child: TextField(
-                        controller: phoneCtrl,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          labelText: "Numéro de téléphone",
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // EMAIL
-                TextField(
-                  controller: emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: "Adresse email",
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // PASSWORD
-                TextField(
-                  controller: passCtrl,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "Mot de passe",
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-
-                if (errorMessage != null)
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
                   Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      errorMessage!,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text("ou", style: TextStyle(color: Colors.grey.shade500)),
                   ),
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                ],
+              ),
 
-                SizedBox(height: h * 0.03),
+              const SizedBox(height: 24),
 
-                // BUTTON REGISTER
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    onPressed: loading ? null : register,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE91E63),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      elevation: 4,
-                    ),
-                    child: loading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                      "Créer le compte",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: h * 0.02),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text("Déjà un compte ?"),
-                    TextButton(
-                      onPressed: () => context.go('/auth'),
-                      child: const Text(
-                        "Se connecter",
-                        style: TextStyle(
-                          color: Color(0xFFE91E63),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                SizedBox(height: h * 0.02),
-              ],
-            ),
+              Row(
+                children: [
+                  Expanded(child: _buildSocialButton(
+                    Icons.g_mobiledata_rounded, 
+                    const Color(0xFFDB4437),
+                    "Google"
+                  )),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildSocialButton(
+                    Icons.apple_rounded, 
+                    Colors.black,
+                    "Apple"
+                  )),
+                ],
+              ),
+              
+              const SizedBox(height: 40),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF1A1A1A),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhoneField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F2),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: DropdownButton<String>(
+              value: selectedCode,
+              underline: const SizedBox(),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              items: countryList.map((c) {
+                return DropdownMenuItem<String>(
+                  value: c["code"],
+                  child: Text("${c["flag"]} ${c["code"]}", style: const TextStyle(fontWeight: FontWeight.w600)),
+                );
+              }).toList(),
+              onChanged: (v) => setState(() => selectedCode = v!),
+            ),
+          ),
+          VerticalDivider(color: Colors.grey.shade300, width: 1, indent: 12, endIndent: 12),
+          Expanded(
+            child: TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF1A1A1A)),
+              decoration: InputDecoration(
+                hintText: "06 12 34 56 78",
+                hintStyle: TextStyle(color: Colors.grey.shade400),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController ctrl, 
+    required String hint, 
+    required IconData icon, 
+    bool obscureText = false, 
+    TextInputType keyboardType = TextInputType.text,
+    bool isPassword = false,
+    VoidCallback? onToggleObscure,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F2),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: TextField(
+        controller: ctrl,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF1A1A1A)),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.grey.shade400),
+          prefixIcon: Icon(icon, color: Colors.grey.shade600),
+          suffixIcon: isPassword ? IconButton(
+            icon: Icon(
+              obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              color: Colors.grey.shade600,
+            ),
+            onPressed: onToggleObscure,
+          ) : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialButton(IconData icon, Color color, String label) {
+    return OutlinedButton(
+      onPressed: () {},
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.black87,
+        minimumSize: const Size(double.infinity, 56),
+        side: BorderSide(color: Colors.grey.shade300),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }
