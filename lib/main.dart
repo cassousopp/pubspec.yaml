@@ -145,7 +145,7 @@ class NexusApp extends StatelessWidget {
       listenable: themeManager,
       builder: (context, _) {
         return MaterialApp.router(
-          title: 'NEXUS',
+          title: 'NexusApp',
           debugShowCheckedModeBanner: false,
           routerConfig: router,
           theme: AppTheme.lightTheme,

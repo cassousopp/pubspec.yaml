@@ -246,6 +246,8 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                       child: Column(
                         children: [
+                          _buildMenuTile("La Vision NEXUS", Icons.auto_awesome_rounded, textColor, isSpecial: true),
+                          Divider(height: 0, thickness: 1, color: isDark ? Colors.white10 : null),
                           _buildMenuTile("Help & Support", Icons.help_outline_rounded, textColor),
                           Divider(height: 0, thickness: 1, color: isDark ? Colors.white10 : null),
                           _buildMenuTile("Privacy Policy", Icons.privacy_tip_outlined, textColor),
@@ -407,10 +409,13 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  Widget _buildMenuTile(String title, IconData icon, Color textColor) {
+  Widget _buildMenuTile(String title, IconData icon, Color textColor, {bool isSpecial = false}) {
     return ListTile(
-      leading: Icon(icon, color: AppTheme.primaryBlue),
-      title: Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
+      leading: Icon(icon, color: isSpecial ? const Color(0xFFFF4D8D) : AppTheme.primaryBlue),
+      title: Text(title, style: TextStyle(
+        fontWeight: isSpecial ? FontWeight.w800 : FontWeight.w600, 
+        color: isSpecial ? const Color(0xFFFF4D8D) : textColor
+      )),
       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       onTap: () => _handleMenuAction(title),
@@ -419,6 +424,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
   void _handleMenuAction(String title) {
     switch (title) {
+      case "La Vision NEXUS":
+        _showVisionDialog();
+        break;
       case "Help & Support":
         _showHelpDialog();
         break;
@@ -429,6 +437,121 @@ class _AccountScreenState extends State<AccountScreen> {
         _showTermsDialog();
         break;
     }
+  }
+
+  void _showVisionDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0A0A0A) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Image.asset("assets/images/logo_nexus.png", height: 80),
+                    const SizedBox(height: 32),
+                    Text(
+                      "Redéfinir la Sécurité",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildVisionPoint(
+                      Icons.auto_awesome_rounded,
+                      "Intelligence Intuitive",
+                      "NEXUS n'est pas qu'une caméra. C'est un esprit vigilant qui apprend à distinguer l'insignifiant de l'essentiel.",
+                      isDark,
+                    ),
+                    _buildVisionPoint(
+                      Icons.shield_moon_rounded,
+                      "Tranquillité Absolue",
+                      "Notre vision est de transformer votre smartphone en un bouclier numérique, actif même quand vous dormez.",
+                      isDark,
+                    ),
+                    _buildVisionPoint(
+                      Icons.all_inclusive_rounded,
+                      "Lien Indéfectible",
+                      "Restez connecté à ce que vous avez de plus précieux, avec une clarté et une rapidité sans précédent.",
+                      isDark,
+                    ),
+                    const SizedBox(height: 40),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF818CF8), Color(0xFF6366F1)]),
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: const Text(
+                        "\"Le futur de la protection n'est pas dans la surveillance, mais dans la sérénité.\"",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? Colors.white10 : Colors.grey.shade100,
+                        foregroundColor: isDark ? Colors.white : Colors.black,
+                        minimumSize: const Size(double.infinity, 60),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      ),
+                      child: const Text("J'adhère à la vision", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVisionPoint(IconData icon, String title, String desc, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 32.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: const Color(0xFF6366F1)),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                const SizedBox(height: 4),
+                Text(desc, style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.black54, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showHelpDialog() {

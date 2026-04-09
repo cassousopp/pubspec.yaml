@@ -70,6 +70,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
               children: [
+                _aboutNexusCard(context),
+                const SizedBox(height: 24),
                 _deviceHeader(context),
                 const SizedBox(height: 18),
                 Text("Notifications",
@@ -436,6 +438,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  Widget _aboutNexusCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF3F0FF),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFDCD7FF), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Image.asset("assets/images/logo_nexus.png", height: 32),
+              const SizedBox(width: 12),
+              Text(
+                "C'est quoi NEXUS ?",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF6366F1),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "NEXUS est votre gardien intelligent. Il surveille vos espaces en temps réel et vous alerte instantanément en cas de mouvement suspect.",
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: isDark ? Colors.white70 : Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "Grâce à son IA intégrée, il capture chaque événement important pour que vous puissiez garder l'esprit tranquille, où que vous soyez.",
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: isDark ? Colors.white70 : Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
