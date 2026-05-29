@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nexus_app/widgets/nexus_scaffold.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart';
 
 class AlertHistoryScreen extends StatefulWidget {
   const AlertHistoryScreen({super.key});

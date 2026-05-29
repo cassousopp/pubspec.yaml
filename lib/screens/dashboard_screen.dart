@@ -368,24 +368,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ],
     );
   }
-
-  Widget _buildStatItem(String label, String count, {Color? color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F2),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(count, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: color ?? Colors.black)),
-        ],
-      ),
-    );
-  }
 }
 
 String timeAgo(DateTime time) {

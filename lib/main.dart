@@ -1,5 +1,8 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:nexus_app/firebase_options.dart';
 import 'package:nexus_app/screens/alert_detail_screen.dart';
 import 'package:nexus_app/screens/alert_history_screen.dart';
 import 'package:nexus_app/screens/alert_screen.dart'; // Pour l'onglet Photos
@@ -49,6 +52,12 @@ class ThemeManager extends ChangeNotifier {
 
 final themeManager = ThemeManager();
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint("Handling a background message: ${message.messageId}");
+}
+
 class _AppLifecycleObserver extends WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -62,6 +71,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   WidgetsBinding.instance.addObserver(_AppLifecycleObserver());
   
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
   await Supabase.initialize(
     url: 'https://theghvwkzakcwtehrdya.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoZWdodndremFrY3d0ZWhyZHlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MzYzOTksImV4cCI6MjA3OTAxMjM5OX0.U_TOsAkRDUZSVp_VAU3w8bJVtCLOgdAIiKp1-Y08X8A',
