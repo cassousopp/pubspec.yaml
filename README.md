@@ -1,16 +1,56 @@
-# nexus_app
+# NEXUS App
 
-A new Flutter project.
+Mobile application for the **NEXUS IoT security system**, a connected anti-theft module for two-wheeled vehicles (bikes, scooters, e-bikes).
 
-## Getting Started
+## Team Members
 
-This project is a starting point for a Flutter application.
+- Djibril Djou Kenne
+- Quentin Faury
+- Cassandra Sopp
 
-A few resources to get you started if this is your first Flutter project:
+## Project Overview
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+NEXUS is an IoT project designed to improve the security of two-wheeled vehicles through:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Motion detection (IMU)
+- Human presence detection (PIR)
+- Image capture using a Raspberry Pi camera
+- Real-time notifications
+- Cloud synchronization with Supabase
+- Mobile monitoring application
+
+## Features
+
+- User authentication
+- Real-time alerts
+- Alert history
+- Image storage
+- Module monitoring
+- Battery level monitoring
+- Module-to-user association
+
+### Mobile
+- Flutter
+- Dart
+
+### Backend / Cloud
+- Supabase
+- PostgreSQL
+- Authentication API
+
+### Embedded System
+- Raspberry Pi 4
+- PIR HC-SR501
+- MPU6050 IMU
+- Raspberry Pi Camera Module 3
+
+## Installation
+
+```bash
+git clone https://github.com/your-username/nexus_app.git
+cd nexus_app
+flutter pub get
+flutter run
+```
+
+
